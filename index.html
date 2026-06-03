@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='5' width='22' height='22' rx='4' fill='%23050708' stroke='%23eeeeee' stroke-width='2'/%3E%3Cpath d='M10 23V10h12v5h-7v8' fill='none' stroke='%23eeeeee' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M20 8l4 4' stroke='%23d8a821' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <title>260602_MazeTerrain</title>
+    <style>
+      #ui-panel {
+        visibility: hidden;
+        opacity: 0;
+      }
+
+      html.ui-ready #ui-panel {
+        visibility: visible;
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-panel" class="apple-panel">
+      <div id="ui-handle" class="panel-drag-handle">
+        <button
+          type="button"
+          id="collapse-toggle"
+          class="collapse-button panel-collapse-toggle"
+          aria-label="Collapse controls"
+          aria-expanded="true"
+        >
+          <span class="collapse-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="ui-body panel-sections">
+        <div class="control-hint">Wheel = Zoom, MMB = Pan, RMB = Orbit</div>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Maze</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control control-grid-2">
+              <button type="button" id="generate-maze" class="pill-button control-button-wide">Generate</button>
+              <button type="button" id="randomize-seed" class="pill-button control-button-wide">Random Seed</button>
+            </div>
+
+            <div id="maze-stats" class="runtime-stats">Cells 324 | Links 323</div>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Width</span>
+                <span id="maze-width-value">18</span>
+              </div>
+              <input type="range" id="maze-width" min="6" max="42" step="1" value="18" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Length</span>
+                <span id="maze-length-value">18</span>
+              </div>
+              <input type="range" id="maze-length" min="6" max="42" step="1" value="18" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Seed</span>
+                <span id="maze-seed-value">260602</span>
+              </div>
+              <input type="range" id="maze-seed" min="1" max="999999" step="1" value="260602" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Algorithm</span>
+              </div>
+              <select id="maze-algorithm" class="select-control">
+                <option value="dfs">DFS Backtracker</option>
+                <option value="prim">Prim</option>
+                <option value="kruskal">Kruskal</option>
+                <option value="division">Recursive Division</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Algorithm Settings</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Loop Chance</span>
+                <span id="loop-chance-value">0.04</span>
+              </div>
+              <input type="range" id="loop-chance" min="0" max="0.25" step="0.01" value="0.04" />
+            </label>
+
+            <label class="control algorithm-control" data-algorithm-control="dfs">
+              <div class="control-row">
+                <span>Corridor Bias</span>
+                <span id="corridor-bias-value">0.62</span>
+              </div>
+              <input type="range" id="corridor-bias" min="0" max="1" step="0.01" value="0.62" />
+            </label>
+
+            <label class="control algorithm-control" data-algorithm-control="prim" hidden>
+              <div class="control-row">
+                <span>Frontier Randomness</span>
+                <span id="frontier-randomness-value">0.78</span>
+              </div>
+              <input type="range" id="frontier-randomness" min="0" max="1" step="0.01" value="0.78" />
+            </label>
+
+            <label class="control algorithm-control" data-algorithm-control="kruskal" hidden>
+              <div class="control-row">
+                <span>Vertical Bias</span>
+                <span id="kruskal-vertical-bias-value">0.50</span>
+              </div>
+              <input type="range" id="kruskal-vertical-bias" min="0" max="1" step="0.01" value="0.5" />
+            </label>
+
+            <label class="control algorithm-control" data-algorithm-control="division" hidden>
+              <div class="control-row">
+                <span>Orientation Bias</span>
+                <span id="division-orientation-bias-value">0.50</span>
+              </div>
+              <input type="range" id="division-orientation-bias" min="0" max="1" step="0.01" value="0.5" />
+            </label>
+
+            <label class="control algorithm-control" data-algorithm-control="division" hidden>
+              <div class="control-row">
+                <span>Min Room Size</span>
+                <span id="division-min-room-size-value">3</span>
+              </div>
+              <input type="range" id="division-min-room-size" min="2" max="8" step="1" value="3" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Terrain</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Levels</span>
+                <span id="level-count-value">7</span>
+              </div>
+              <input type="range" id="level-count" min="2" max="16" step="1" value="7" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Height Scale</span>
+                <span id="height-scale-value">0.55</span>
+              </div>
+              <input type="range" id="height-scale" min="0.2" max="1.4" step="0.01" value="0.55" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Elevation Roughness</span>
+                <span id="elevation-roughness-value">0.64</span>
+              </div>
+              <input type="range" id="elevation-roughness" min="0" max="1" step="0.01" value="0.64" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Max Step Delta</span>
+                <span id="max-height-delta-value">2</span>
+              </div>
+              <input type="range" id="max-height-delta" min="1" max="6" step="1" value="2" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Transitions</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Ramp Mix</span>
+                <span id="ramp-ratio-value">0.42</span>
+              </div>
+              <input type="range" id="ramp-ratio" min="0" max="1" step="0.01" value="0.42" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Stair Steps</span>
+                <span id="stair-steps-value">7</span>
+              </div>
+              <input type="range" id="stair-steps" min="3" max="14" step="1" value="7" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Ramp Width</span>
+                <span id="ramp-width-value">0.58</span>
+              </div>
+              <input type="range" id="ramp-width" min="0.28" max="0.9" step="0.01" value="0.58" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Render</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Wall Height</span>
+                <span id="wall-height-value">0.72</span>
+              </div>
+              <input type="range" id="wall-height" min="0.2" max="2.4" step="0.01" value="0.72" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Wall Thickness</span>
+                <span id="wall-thickness-value">0.13</span>
+              </div>
+              <input type="range" id="wall-thickness" min="0.05" max="0.36" step="0.01" value="0.13" />
+            </label>
+
+            <div class="control control-grid-2 toggle-grid">
+              <label class="toggle-control">
+                <span>Markers</span>
+                <input type="checkbox" id="show-markers" checked />
+              </label>
+              <button type="button" id="export-screenshot" class="pill-button control-button-wide">Screenshot</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="ui-handle-bottom"></div>
+    </div>
+
+    <canvas id="app-canvas"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,19 +1,28 @@
 # 260602_MazeTerrain
 
-260602_MazeTerrain is a starter project for building a maze terrain experience, intended to grow into an interactive environment with generated layouts, navigable paths, and terrain-focused presentation.
+260602_MazeTerrain is an interactive Three.js maze terrain generator. It builds connected grid mazes with multiple algorithm styles, applies seeded elevation so the maze rises and falls like a blocky hilly terrain, and renders the result as a white studio-lit mesh with stairs and ramps on a black background.
 
 ## Features
 
-- Startup project structure ready for GitHub initialization.
-- README baseline for project summary, setup, and controls.
-- Planned maze terrain foundation for future generation, rendering, and navigation work.
+- Vite, TypeScript, and Three.js app scaffold.
+- 2.5D maze generation with DFS backtracker, Prim, Kruskal, and recursive division algorithms.
+- Seeded width, length, loop chance, terrain levels, roughness, height scale, wall, stair, and ramp controls.
+- Draggable collapsible control panel based on the WoolyPaths UI style.
+- Studio lighting, soft shadows, orbit camera controls, optional start/end markers, and screenshot export.
 
 ## Getting Started
 
-1. Clone the repository.
-2. Open the project folder.
-3. Add the application source files and install any project-specific dependencies as they are introduced.
+1. Install dependencies with `npm install`.
+2. Start the local dev server with `npm run dev`.
+3. Open the printed local URL in a browser.
+4. Build a production copy with `npm run build`.
+5. Run unit tests with `npm test`.
 
 ## Controls
 
-- Controls have not been implemented yet.
+- Mouse wheel zooms the camera.
+- Middle mouse pans the camera.
+- Right mouse orbits the camera.
+- Use the Generate and Random Seed buttons to rebuild the maze.
+- Adjust algorithm, terrain, transition, and render sliders from the control panel.
+- Use Screenshot to export the current canvas.
