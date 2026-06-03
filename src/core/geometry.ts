@@ -17,6 +17,7 @@ const FOUNDATION_THICKNESS = 0.28;
 const CONNECTOR_THICKNESS = 0.12;
 const RAMP_THICKNESS = 0.08;
 const PLATFORM_SIZE_RATIO = 0.88;
+const PLATFORM_SLAB_THICKNESS = 0.16;
 const TRANSITION_SURFACE_LIFT = 0.006;
 const MARKER_GOLD = 0xd8aa2f;
 const MARKER_AMBER = 0xf0c748;
@@ -141,23 +142,37 @@ function getSideSegments(cell: MazeCell, direction: Direction, settings: MazeRen
   return segments.filter((segment) => segment.to - segment.from > 1e-5);
 }
 
-function getTransitionSpan(from: WorldCell, to: WorldCell, settings: MazeRenderSettings): TransitionSpan {
+function getSlabBottom(top: number): number {
+  return Math.max(0, top - PLATFORM_SLAB_THICKNESS);
+}
+
+function getTransitionOverlap(settings: MazeRenderSettings): number {
+  const platformHalf = getPlatformSize(settings) * 0.5;
+  return Math.min(platformHalf * 0.45, Math.max(settings.cellSize * 0.16, settings.wallThickness * 1.6));
+}
+
+function getTransitionSpan(from: WorldCell, to: WorldCell, settings: MazeRenderSettings, setback = 0): TransitionSpan {
   const fromCenter = new Vector3(from.x, 0, from.z);
   const toCenter = new Vector3(to.x, 0, to.z);
   const centerDelta = toCenter.clone().sub(fromCenter);
   const centerDistance = Math.max(centerDelta.length(), 1e-6);
   const axis = centerDelta.clone().divideScalar(centerDistance);
   const platformHalf = getPlatformSize(settings) * 0.5;
-  const overlap = Math.min(platformHalf * 0.45, Math.max(settings.cellSize * 0.16, settings.wallThickness * 1.6));
+  const overlap = getTransitionOverlap(settings);
   const inset = Math.max(0, platformHalf - overlap);
-  const start = fromCenter.clone().add(axis.clone().multiplyScalar(inset));
-  const end = toCenter.clone().sub(axis.clone().multiplyScalar(inset));
+  const clampedSetback = Math.min(setback, inset);
+  const start = fromCenter.clone().add(axis.clone().multiplyScalar(inset - clampedSetback));
+  const end = toCenter.clone().sub(axis.clone().multiplyScalar(inset + clampedSetback));
   return {
     start,
     end,
     axis,
     length: Math.max(start.distanceTo(end), settings.cellSize * 0.12),
   };
+}
+
+function getHeightTransitionSpan(from: WorldCell, to: WorldCell, settings: MazeRenderSettings): TransitionSpan {
+  return getTransitionSpan(from, to, settings, getTransitionOverlap(settings));
 }
 
 function hasLinkedDirection(cell: MazeCell, direction: Direction): boolean {
@@ -173,6 +188,8 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
   const zMin = world.z - half;
   const zMax = world.z + half;
   const positions: number[] = [];
+  const slabBottom = getSlabBottom(world.top);
+  const openingHalf = getOpeningHalfWidth(settings);
 
   pushFace(
     positions,
@@ -180,6 +197,13 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
     new Vector3(xMin, world.top, zMax),
     new Vector3(xMax, world.top, zMax),
     new Vector3(xMax, world.top, zMin),
+  );
+  pushFace(
+    positions,
+    new Vector3(xMin, slabBottom, zMin),
+    new Vector3(xMax, slabBottom, zMin),
+    new Vector3(xMax, slabBottom, zMax),
+    new Vector3(xMin, slabBottom, zMax),
   );
   pushFace(positions, new Vector3(xMin, 0, zMin), new Vector3(xMax, 0, zMin), new Vector3(xMax, 0, zMax), new Vector3(xMin, 0, zMax));
 
@@ -192,6 +216,15 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
       new Vector3(world.x + segment.to, 0, zMin),
     );
   }
+  if (hasLinkedDirection(cell, 'north')) {
+    pushFace(
+      positions,
+      new Vector3(world.x - openingHalf, slabBottom, zMin),
+      new Vector3(world.x - openingHalf, world.top, zMin),
+      new Vector3(world.x + openingHalf, world.top, zMin),
+      new Vector3(world.x + openingHalf, slabBottom, zMin),
+    );
+  }
   for (const segment of getSideSegments(cell, 'south', settings)) {
     pushFace(
       positions,
@@ -199,6 +232,15 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
       new Vector3(world.x + segment.to, 0, zMax),
       new Vector3(world.x + segment.to, world.top, zMax),
       new Vector3(world.x + segment.from, world.top, zMax),
+    );
+  }
+  if (hasLinkedDirection(cell, 'south')) {
+    pushFace(
+      positions,
+      new Vector3(world.x - openingHalf, slabBottom, zMax),
+      new Vector3(world.x + openingHalf, slabBottom, zMax),
+      new Vector3(world.x + openingHalf, world.top, zMax),
+      new Vector3(world.x - openingHalf, world.top, zMax),
     );
   }
   for (const segment of getSideSegments(cell, 'west', settings)) {
@@ -210,6 +252,15 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
       new Vector3(xMin, world.top, world.z + segment.from),
     );
   }
+  if (hasLinkedDirection(cell, 'west')) {
+    pushFace(
+      positions,
+      new Vector3(xMin, slabBottom, world.z - openingHalf),
+      new Vector3(xMin, slabBottom, world.z + openingHalf),
+      new Vector3(xMin, world.top, world.z + openingHalf),
+      new Vector3(xMin, world.top, world.z - openingHalf),
+    );
+  }
   for (const segment of getSideSegments(cell, 'east', settings)) {
     pushFace(
       positions,
@@ -217,6 +268,15 @@ function addPlatformGeometry(geometries: BufferGeometry[], graph: MazeGraph, cel
       new Vector3(xMax, world.top, world.z + segment.from),
       new Vector3(xMax, world.top, world.z + segment.to),
       new Vector3(xMax, 0, world.z + segment.to),
+    );
+  }
+  if (hasLinkedDirection(cell, 'east')) {
+    pushFace(
+      positions,
+      new Vector3(xMax, slabBottom, world.z - openingHalf),
+      new Vector3(xMax, world.top, world.z - openingHalf),
+      new Vector3(xMax, world.top, world.z + openingHalf),
+      new Vector3(xMax, slabBottom, world.z + openingHalf),
     );
   }
 
@@ -275,7 +335,7 @@ function addStairs(
   settings: MazeRenderSettings,
 ): void {
   const steps = Math.max(1, Math.round(settings.stairSteps));
-  const span = getTransitionSpan(low, high, settings);
+  const span = getHeightTransitionSpan(low, high, settings);
   const pathWidth = settings.cellSize * settings.rampWidth;
   const stepLength = (span.length / steps) * 1.04;
   const horizontal = Math.abs(span.axis.x) >= Math.abs(span.axis.z);
@@ -313,7 +373,7 @@ function addHeightConnector(
   const high = heightDelta > 0 ? nextWorld : currentWorld;
   const rampChance = stableTransitionValue(graph.settings.seed, cell, next);
   if (rampChance < settings.rampRatio) {
-    const span = getTransitionSpan(low, high, settings);
+    const span = getHeightTransitionSpan(low, high, settings);
     geometries.push(
       createRamp(
         span.start,
