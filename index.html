@@ -32,34 +32,25 @@
       </div>
 
       <div class="ui-body panel-sections">
-        <div class="control-hint">Wheel = Zoom, MMB = Pan, RMB = Orbit</div>
-
         <section class="panel-section">
           <div class="panel-section-header">
             <span class="panel-section-label">Maze</span>
           </div>
           <div class="panel-section-content panel-controls-stack">
-            <div class="control control-grid-2">
-              <button type="button" id="generate-maze" class="pill-button control-button-wide">Generate</button>
-              <button type="button" id="randomize-seed" class="pill-button control-button-wide">Random Seed</button>
-            </div>
-
-            <div id="maze-stats" class="runtime-stats">Cells 324 | Links 323</div>
-
             <label class="control">
               <div class="control-row">
-                <span>Width</span>
-                <span id="maze-width-value">18</span>
+                <span>Maze Type</span>
               </div>
-              <input type="range" id="maze-width" min="6" max="42" step="1" value="18" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Length</span>
-                <span id="maze-length-value">18</span>
-              </div>
-              <input type="range" id="maze-length" min="6" max="42" step="1" value="18" />
+              <span class="select-shell select-control">
+                <select id="maze-algorithm" class="native-select-hidden">
+                  <option value="dfs">DFS Backtracker</option>
+                  <option value="prim">Prim</option>
+                  <option value="kruskal">Kruskal</option>
+                  <option value="division">Recursive Division</option>
+                </select>
+                <button type="button" id="maze-algorithm-trigger" class="select-trigger">DFS Backtracker</button>
+                <ul id="maze-algorithm-menu" class="select-menu" hidden></ul>
+              </span>
             </label>
 
             <label class="control">
@@ -70,25 +61,6 @@
               <input type="range" id="maze-seed" min="1" max="999999" step="1" value="260602" />
             </label>
 
-            <label class="control">
-              <div class="control-row">
-                <span>Algorithm</span>
-              </div>
-              <select id="maze-algorithm" class="select-control">
-                <option value="dfs">DFS Backtracker</option>
-                <option value="prim">Prim</option>
-                <option value="kruskal">Kruskal</option>
-                <option value="division">Recursive Division</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <section class="panel-section">
-          <div class="panel-section-header">
-            <span class="panel-section-label">Algorithm Settings</span>
-          </div>
-          <div class="panel-section-content panel-controls-stack">
             <label class="control">
               <div class="control-row">
                 <span>Loop Chance</span>
@@ -136,6 +108,48 @@
               </div>
               <input type="range" id="division-min-room-size" min="2" max="8" step="1" value="3" />
             </label>
+
+            <div class="control control-grid-2 toggle-grid">
+              <label class="toggle-control">
+                <span>Markers</span>
+                <input type="checkbox" id="show-markers" checked />
+              </label>
+              <label class="toggle-control">
+                <span>Cheat</span>
+                <input type="checkbox" id="show-cheat" />
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Extents</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Width</span>
+                <span id="maze-width-value">18</span>
+              </div>
+              <input type="range" id="maze-width" min="6" max="42" step="1" value="18" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Length</span>
+                <span id="maze-length-value">18</span>
+              </div>
+              <input type="range" id="maze-length" min="6" max="42" step="1" value="18" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Wall Height</span>
+                <span id="wall-height-value">0.72</span>
+              </div>
+              <input type="range" id="wall-height" min="0.2" max="2.4" step="0.01" value="0.72" />
+            </label>
           </div>
         </section>
 
@@ -167,80 +181,17 @@
               </div>
               <input type="range" id="elevation-roughness" min="0" max="1" step="0.01" value="0.64" />
             </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Max Step Delta</span>
-                <span id="max-height-delta-value">2</span>
-              </div>
-              <input type="range" id="max-height-delta" min="1" max="6" step="1" value="2" />
-            </label>
           </div>
         </section>
 
         <section class="panel-section">
           <div class="panel-section-header">
-            <span class="panel-section-label">Transitions</span>
+            <span class="panel-section-label">Export</span>
           </div>
           <div class="panel-section-content panel-controls-stack">
-            <label class="control">
-              <div class="control-row">
-                <span>Ramp Mix</span>
-                <span id="ramp-ratio-value">0.42</span>
-              </div>
-              <input type="range" id="ramp-ratio" min="0" max="1" step="0.01" value="0.42" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Stair Steps</span>
-                <span id="stair-steps-value">7</span>
-              </div>
-              <input type="range" id="stair-steps" min="3" max="14" step="1" value="7" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Ramp Width</span>
-                <span id="ramp-width-value">0.58</span>
-              </div>
-              <input type="range" id="ramp-width" min="0.28" max="0.9" step="0.01" value="0.58" />
-            </label>
-          </div>
-        </section>
-
-        <section class="panel-section">
-          <div class="panel-section-header">
-            <span class="panel-section-label">Render</span>
-          </div>
-          <div class="panel-section-content panel-controls-stack">
-            <label class="control">
-              <div class="control-row">
-                <span>Wall Height</span>
-                <span id="wall-height-value">0.72</span>
-              </div>
-              <input type="range" id="wall-height" min="0.2" max="2.4" step="0.01" value="0.72" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Wall Thickness</span>
-                <span id="wall-thickness-value">0.13</span>
-              </div>
-              <input type="range" id="wall-thickness" min="0.05" max="0.36" step="0.01" value="0.13" />
-            </label>
-
-            <div class="control control-grid-2 toggle-grid">
-              <label class="toggle-control">
-                <span>Markers</span>
-                <input type="checkbox" id="show-markers" checked />
-              </label>
-              <label class="toggle-control">
-                <span>Cheat</span>
-                <input type="checkbox" id="show-cheat" />
-              </label>
-              <button type="button" id="export-screenshot" class="pill-button control-button-wide">Screenshot</button>
-            </div>
+            <button type="button" id="export-obj" class="pill-button control-button-wide">Export OBJ</button>
+            <button type="button" id="export-glb" class="pill-button control-button-wide">Export GLB</button>
+            <button type="button" id="export-screenshot" class="pill-button control-button-wide">Export Screenshot</button>
           </div>
         </section>
       </div>

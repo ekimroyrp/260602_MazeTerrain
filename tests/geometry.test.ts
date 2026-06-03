@@ -1,8 +1,23 @@
 import { Mesh } from 'three';
 import { describe, expect, it } from 'vitest';
+import { exportMazeMeshToGlb, exportMazeMeshToObj, getMazeMeshFromGroup } from '../src/core/exporters';
 import { createMazeGroup, createMazeTerrainGeometry, disposeMazeGroup } from '../src/core/geometry';
 import { DEFAULT_SETTINGS, generateMaze } from '../src/core/maze';
 import type { MazeGraph } from '../src/types';
+
+class TestFileReader {
+  result: ArrayBuffer | null = null;
+  onloadend: (() => void) | null = null;
+
+  async readAsArrayBuffer(blob: Blob): Promise<void> {
+    this.result = await blob.arrayBuffer();
+    this.onloadend?.();
+  }
+}
+
+if (!('FileReader' in globalThis)) {
+  Object.defineProperty(globalThis, 'FileReader', { value: TestFileReader });
+}
 
 const graph = generateMaze({
   ...DEFAULT_SETTINGS,
@@ -18,9 +33,6 @@ const renderSettings = {
   wallThickness: graph.settings.wallThickness,
   wallHeight: graph.settings.wallHeight,
   heightScale: graph.settings.heightScale,
-  rampRatio: graph.settings.rampRatio,
-  rampWidth: graph.settings.rampWidth,
-  stairSteps: graph.settings.stairSteps,
   showMarkers: true,
   showCheat: false,
 };
@@ -182,6 +194,7 @@ describe('maze geometry', () => {
     });
 
     expect(meshCount).toBeGreaterThanOrEqual(5);
+    expect(group.getObjectByName('maze-mesh')).toBeInstanceOf(Mesh);
     expect(group.getObjectByName('start-marker')).toBeDefined();
     expect(group.getObjectByName('end-marker')).toBeDefined();
     expect(group.getObjectByName('start-marker-form')).toBeDefined();
@@ -213,13 +226,43 @@ describe('maze geometry', () => {
     disposeMazeGroup(visibleGroup);
   });
 
+  it('exports only the terrain mesh to OBJ', () => {
+    const group = createMazeGroup(graph, { ...renderSettings, showCheat: true, showMarkers: true });
+    const mesh = getMazeMeshFromGroup(group);
+
+    expect(mesh).toBeInstanceOf(Mesh);
+    if (mesh instanceof Mesh) {
+      const contents = exportMazeMeshToObj(mesh);
+      expect(contents).toContain('260602_MazeTerrain_maze_mesh');
+      expect(contents).not.toContain('cheat-path');
+      expect(contents).not.toContain('start-marker');
+      expect(contents).not.toContain('end-marker');
+      expect(contents.length).toBeGreaterThan(1000);
+    }
+
+    disposeMazeGroup(group);
+  });
+
+  it('exports the terrain mesh to binary GLB', async () => {
+    const group = createMazeGroup(graph, { ...renderSettings, showCheat: true, showMarkers: true });
+    const mesh = getMazeMeshFromGroup(group);
+
+    expect(mesh).toBeInstanceOf(Mesh);
+    if (mesh instanceof Mesh) {
+      const contents = await exportMazeMeshToGlb(mesh);
+      const magic = new TextDecoder().decode(new Uint8Array(contents, 0, 4));
+      expect(magic).toBe('glTF');
+      expect(contents.byteLength).toBeGreaterThan(1000);
+    }
+
+    disposeMazeGroup(group);
+  });
+
   it('routes the cheat path over stair transition heights', () => {
     const transitionGraph = createTransitionGraph();
     const group = createMazeGroup(transitionGraph, {
       ...renderSettings,
       heightScale: 0.5,
-      rampRatio: 0,
-      stairSteps: 5,
       showMarkers: false,
       showCheat: true,
     });
@@ -227,11 +270,13 @@ describe('maze geometry', () => {
     const lowTop = 0.28;
     const highTop = 0.28 + 2 * 0.5;
     const cheatLift = 0.13;
+    const targetStepHeight = 0.55 / 6;
+    const dynamicStepCount = Math.round((highTop - lowTop) / targetStepHeight) + 1;
 
     expect(cheatPath).toBeInstanceOf(Mesh);
     if (cheatPath instanceof Mesh) {
-      for (let index = 0; index < 5; index += 1) {
-        const heightRatio = index / 4;
+      for (let index = 0; index < dynamicStepCount; index += 1) {
+        const heightRatio = index / (dynamicStepCount - 1);
         expect(hasMeshVertexNearY(cheatPath, lowTop + (highTop - lowTop) * heightRatio + cheatLift)).toBe(true);
       }
     }
@@ -252,8 +297,6 @@ describe('maze geometry', () => {
     const settings = {
       ...renderSettings,
       heightScale: 0.5,
-      rampRatio: 0,
-      stairSteps: 5,
       showMarkers: false,
     };
     const geometry = createMazeTerrainGeometry(transitionGraph, settings);
@@ -267,21 +310,34 @@ describe('maze geometry', () => {
     geometry.dispose();
   });
 
-  it('extends ramps into the destination platform at platform height', () => {
+  it('uses dynamic stair heights for taller transitions', () => {
     const transitionGraph = createTransitionGraph();
     const settings = {
       ...renderSettings,
       heightScale: 0.5,
-      rampRatio: 1,
       showMarkers: false,
     };
     const geometry = createMazeTerrainGeometry(transitionGraph, settings);
+    const positions = geometry.getAttribute('position');
+    const lowPlatformTop = 0.28;
     const highPlatformTop = 0.28 + 2 * 0.5;
     const highPlatformEdge = settings.cellSize * 0.5 - settings.cellSize * 0.88 * 0.5;
+    const targetStepHeight = 0.55 / 6;
+    const dynamicStepCount = Math.round((highPlatformTop - lowPlatformTop) / targetStepHeight) + 1;
     const transitionLift = 0.006;
+    const stepTopLevels = new Set<number>();
+
+    for (let index = 0; index < positions.count; index += 1) {
+      const y = positions.getY(index);
+      const z = positions.getZ(index);
+      if (Math.abs(z) < 0.35 && y > lowPlatformTop && y <= highPlatformTop + transitionLift + 0.001) {
+        stepTopLevels.add(Number(y.toFixed(3)));
+      }
+    }
 
     expect(hasRaisedTransitionVertex(geometry, highPlatformEdge, highPlatformTop + transitionLift)).toBe(true);
     expect(getMaxRaisedTransitionX(geometry, highPlatformTop + transitionLift)).toBeLessThanOrEqual(highPlatformEdge + 0.015);
+    expect(stepTopLevels.size).toBeGreaterThanOrEqual(dynamicStepCount - 1);
 
     geometry.dispose();
   });
@@ -291,17 +347,16 @@ describe('maze geometry', () => {
     const settings = {
       ...renderSettings,
       heightScale: 0.5,
-      rampRatio: 1,
       showMarkers: false,
     };
     const geometry = createMazeTerrainGeometry(transitionGraph, settings);
     const platformHalf = settings.cellSize * 0.88 * 0.5;
     const lowSideX = -settings.cellSize * 0.5 + platformHalf;
     const highSideX = settings.cellSize * 0.5 - platformHalf;
-    const openingHalfDepth = settings.cellSize * settings.rampWidth * 0.5 * 0.9;
+    const openingHalfDepth = settings.cellSize * 0.58 * 0.5 * 0.9;
 
     expect(hasBlockingSideTriangle(geometry, lowSideX, 0.28, openingHalfDepth)).toBe(false);
-    expect(hasBlockingSideTriangle(geometry, highSideX, 0.28 + 2 * 0.5, openingHalfDepth)).toBe(false);
+    expect(hasSlabApronTriangle(geometry, highSideX, 0.28 + 2 * 0.5 - 0.16, 0.28 + 2 * 0.5, openingHalfDepth)).toBe(true);
 
     geometry.dispose();
   });
@@ -311,7 +366,6 @@ describe('maze geometry', () => {
     const settings = {
       ...renderSettings,
       heightScale: 0.5,
-      rampRatio: 1,
       showMarkers: false,
     };
     const geometry = createMazeTerrainGeometry(transitionGraph, settings);
@@ -321,7 +375,7 @@ describe('maze geometry', () => {
     const slabThickness = 0.16;
     const lowSideX = -settings.cellSize * 0.5 + platformHalf;
     const highSideX = settings.cellSize * 0.5 - platformHalf;
-    const openingHalfDepth = settings.cellSize * settings.rampWidth * 0.5 * 0.9;
+    const openingHalfDepth = settings.cellSize * 0.58 * 0.5 * 0.9;
     const lowCenterX = -settings.cellSize * 0.5;
     const highCenterX = settings.cellSize * 0.5;
 

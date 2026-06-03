@@ -17,10 +17,12 @@ import { findSolutionPath, getCell, getDirectionDelta } from './maze';
 
 const FOUNDATION_THICKNESS = 0.28;
 const CONNECTOR_THICKNESS = 0.12;
-const RAMP_THICKNESS = 0.08;
 const PLATFORM_SIZE_RATIO = 0.88;
 const PLATFORM_SLAB_THICKNESS = 0.16;
 const TRANSITION_SURFACE_LIFT = 0.006;
+const STAIR_WIDTH_RATIO = 0.58;
+const TARGET_STAIR_STEP_HEIGHT = 0.55 / 6;
+const MAX_DYNAMIC_STAIR_STEPS = 160;
 const MARKER_GOLD = 0xd8aa2f;
 const MARKER_AMBER = 0xf0c748;
 const MAZE_WHITE = 0xe9e9e3;
@@ -91,53 +93,6 @@ function pushFace(positions: number[], a: Vector3, b: Vector3, c: Vector3, d: Ve
   positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
 }
 
-function createRamp(
-  start: Vector3,
-  end: Vector3,
-  startTop: number,
-  endTop: number,
-  width: number,
-): BufferGeometry {
-  const startVector = start.clone();
-  const endVector = end.clone();
-  const axis = endVector.clone().sub(startVector).normalize();
-  const side = new Vector3(-axis.z, 0, axis.x).multiplyScalar(width * 0.5);
-  const liftedStartTop = startTop + TRANSITION_SURFACE_LIFT;
-  const liftedEndTop = endTop + TRANSITION_SURFACE_LIFT;
-  const bottomStart = Math.max(0.02, liftedStartTop - RAMP_THICKNESS);
-  const bottomEnd = Math.max(0.02, liftedEndTop - RAMP_THICKNESS);
-
-  const topStartLeft = startVector.clone().add(side).setY(liftedStartTop);
-  const topStartRight = startVector.clone().sub(side).setY(liftedStartTop);
-  const topEndLeft = endVector.clone().add(side).setY(liftedEndTop);
-  const topEndRight = endVector.clone().sub(side).setY(liftedEndTop);
-  const bottomStartLeft = startVector.clone().add(side).setY(bottomStart);
-  const bottomStartRight = startVector.clone().sub(side).setY(bottomStart);
-  const bottomEndLeft = endVector.clone().add(side).setY(bottomEnd);
-  const bottomEndRight = endVector.clone().sub(side).setY(bottomEnd);
-
-  const positions: number[] = [];
-  pushFace(positions, topStartLeft, topEndLeft, topEndRight, topStartRight);
-  pushFace(positions, bottomStartRight, bottomEndRight, bottomEndLeft, bottomStartLeft);
-  pushFace(positions, topStartLeft, bottomStartLeft, bottomEndLeft, topEndLeft);
-  pushFace(positions, topEndRight, bottomEndRight, bottomStartRight, topStartRight);
-  pushFace(positions, topStartRight, bottomStartRight, bottomStartLeft, topStartLeft);
-  pushFace(positions, topEndLeft, bottomEndLeft, bottomEndRight, topEndRight);
-
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
-  geometry.computeVertexNormals();
-  geometry.computeBoundingSphere();
-  return geometry;
-}
-
-function stableTransitionValue(seed: number, a: MazeCell, b: MazeCell): number {
-  let value = seed ^ (a.x * 374761393) ^ (a.y * 668265263) ^ (b.x * 2246822519) ^ (b.y * 3266489917);
-  value = Math.imul(value ^ (value >>> 15), value | 1);
-  value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-  return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-}
-
 function getWorldCell(graph: MazeGraph, cell: MazeCell, settings: MazeRenderSettings): WorldCell {
   return {
     x: (cell.x - (graph.width - 1) * 0.5) * settings.cellSize,
@@ -152,8 +107,12 @@ function getPlatformSize(settings: MazeRenderSettings): number {
 
 function getOpeningHalfWidth(settings: MazeRenderSettings): number {
   const platformHalf = getPlatformSize(settings) * 0.5;
-  const pathHalf = settings.cellSize * settings.rampWidth * 0.5;
+  const pathHalf = getPathWidth(settings) * 0.5;
   return Math.min(platformHalf, pathHalf + settings.wallThickness * 0.7);
+}
+
+function getPathWidth(settings: MazeRenderSettings): number {
+  return settings.cellSize * STAIR_WIDTH_RATIO;
 }
 
 function getSideSegments(cell: MazeCell, direction: Direction, settings: MazeRenderSettings): SideSegment[] {
@@ -204,6 +163,12 @@ function getTransitionSpan(from: WorldCell, to: WorldCell, settings: MazeRenderS
 
 function getHeightTransitionSpan(from: WorldCell, to: WorldCell, settings: MazeRenderSettings): TransitionSpan {
   return getTransitionSpan(from, to, settings, getTransitionOverlap(settings));
+}
+
+function getDynamicStairSteps(low: WorldCell, high: WorldCell): number {
+  const rise = Math.abs(high.top - low.top);
+  const intervals = Math.max(1, Math.round(rise / TARGET_STAIR_STEP_HEIGHT));
+  return Math.min(MAX_DYNAMIC_STAIR_STEPS, intervals + 1);
 }
 
 function hasLinkedDirection(cell: MazeCell, direction: Direction): boolean {
@@ -348,7 +313,7 @@ function addFlatConnector(
 ): void {
   const span = getTransitionSpan(a, b, settings);
   const connectorLength = span.length;
-  const pathWidth = settings.cellSize * settings.rampWidth;
+  const pathWidth = getPathWidth(settings);
   const center = span.start.clone().add(span.end).multiplyScalar(0.5);
   const y = a.top + TRANSITION_SURFACE_LIFT - CONNECTOR_THICKNESS * 0.5;
   if (direction === 'east') {
@@ -365,9 +330,9 @@ function addStairs(
   direction: Direction,
   settings: MazeRenderSettings,
 ): void {
-  const steps = Math.max(1, Math.round(settings.stairSteps));
+  const steps = getDynamicStairSteps(low, high);
   const span = getHeightTransitionSpan(low, high, settings);
-  const pathWidth = settings.cellSize * settings.rampWidth;
+  const pathWidth = getPathWidth(settings);
   const stepLength = (span.length / steps) * 1.04;
   const horizontal = Math.abs(span.axis.x) >= Math.abs(span.axis.z);
 
@@ -402,21 +367,7 @@ function addHeightConnector(
 
   const low = heightDelta > 0 ? currentWorld : nextWorld;
   const high = heightDelta > 0 ? nextWorld : currentWorld;
-  const rampChance = stableTransitionValue(graph.settings.seed, cell, next);
-  if (rampChance < settings.rampRatio) {
-    const span = getHeightTransitionSpan(low, high, settings);
-    geometries.push(
-      createRamp(
-        span.start,
-        span.end,
-        low.top,
-        high.top,
-        settings.cellSize * settings.rampWidth,
-      ),
-    );
-  } else {
-    addStairs(geometries, low, high, direction, settings);
-  }
+  addStairs(geometries, low, high, direction, settings);
 }
 
 export function createMazeTerrainGeometry(graph: MazeGraph, settings: MazeRenderSettings): BufferGeometry {
@@ -499,18 +450,6 @@ function getCheatPoint(x: number, z: number, top: number): Vector3 {
   return new Vector3(x, top + CHEAT_PATH_LIFT, z);
 }
 
-function getStableTransitionCells(a: MazeCell, b: MazeCell): [MazeCell, MazeCell] {
-  if (a.y === b.y) {
-    return a.x < b.x ? [a, b] : [b, a];
-  }
-  return a.y < b.y ? [a, b] : [b, a];
-}
-
-function usesRampTransition(graph: MazeGraph, a: MazeCell, b: MazeCell, settings: MazeRenderSettings): boolean {
-  const [from, to] = getStableTransitionCells(a, b);
-  return stableTransitionValue(graph.settings.seed, from, to) < settings.rampRatio;
-}
-
 function addCheatLinkPoints(
   points: Vector3[],
   graph: MazeGraph,
@@ -535,21 +474,17 @@ function addCheatLinkPoints(
   const travelingUp = currentWorld.top < nextWorld.top;
   const span = getHeightTransitionSpan(lowWorld, highWorld, settings);
   const transitionPoints: Vector3[] = [];
+  const steps = getDynamicStairSteps(lowWorld, highWorld);
 
   transitionPoints.push(getCheatPoint(span.start.x, span.start.z, lowWorld.top));
-  if (usesRampTransition(graph, current, next, settings)) {
-    transitionPoints.push(getCheatPoint(span.end.x, span.end.z, highWorld.top));
-  } else {
-    const steps = Math.max(1, Math.round(settings.stairSteps));
-    for (let index = 0; index < steps; index += 1) {
-      const positionRatio = (index + 0.5) / steps;
-      const heightRatio = steps === 1 ? 1 : index / (steps - 1);
-      const position = span.start.clone().lerp(span.end, positionRatio);
-      const top = lowWorld.top + (highWorld.top - lowWorld.top) * heightRatio;
-      transitionPoints.push(getCheatPoint(position.x, position.z, top));
-    }
-    transitionPoints.push(getCheatPoint(span.end.x, span.end.z, highWorld.top));
+  for (let index = 0; index < steps; index += 1) {
+    const positionRatio = (index + 0.5) / steps;
+    const heightRatio = steps === 1 ? 1 : index / (steps - 1);
+    const position = span.start.clone().lerp(span.end, positionRatio);
+    const top = lowWorld.top + (highWorld.top - lowWorld.top) * heightRatio;
+    transitionPoints.push(getCheatPoint(position.x, position.z, top));
   }
+  transitionPoints.push(getCheatPoint(span.end.x, span.end.z, highWorld.top));
 
   if (!travelingUp) {
     transitionPoints.reverse();
@@ -626,6 +561,7 @@ export function createMazeGroup(graph: MazeGraph, settings: MazeRenderSettings):
     roughness: 0.74,
   });
   const terrain = new Mesh(terrainGeometry, terrainMaterial);
+  terrain.name = 'maze-mesh';
   terrain.castShadow = true;
   terrain.receiveShadow = true;
   group.add(terrain);

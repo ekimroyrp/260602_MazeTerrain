@@ -13,8 +13,9 @@ import {
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { exportMazeMeshToGlb, exportMazeMeshToObj, getMazeMeshFromGroup } from './core/exporters';
 import { createMazeGroup, disposeMazeGroup } from './core/geometry';
-import { DEFAULT_SETTINGS, generateMaze, getAlgorithmLabel, normalizeSettings } from './core/maze';
+import { DEFAULT_SETTINGS, generateMaze, normalizeSettings } from './core/maze';
 import type { MazeAlgorithm, MazeGraph, MazeSettings } from './types';
 
 type UiRefs = {
@@ -22,9 +23,6 @@ type UiRefs = {
   handleTop: HTMLDivElement;
   handleBottom: HTMLDivElement;
   collapseToggle: HTMLButtonElement;
-  generateMaze: HTMLButtonElement;
-  randomizeSeed: HTMLButtonElement;
-  mazeStats: HTMLDivElement;
   width: HTMLInputElement;
   widthValue: HTMLSpanElement;
   length: HTMLInputElement;
@@ -32,6 +30,8 @@ type UiRefs = {
   seed: HTMLInputElement;
   seedValue: HTMLSpanElement;
   algorithm: HTMLSelectElement;
+  algorithmTrigger: HTMLButtonElement;
+  algorithmMenu: HTMLUListElement;
   loopChance: HTMLInputElement;
   loopChanceValue: HTMLSpanElement;
   corridorBias: HTMLInputElement;
@@ -50,20 +50,12 @@ type UiRefs = {
   heightScaleValue: HTMLSpanElement;
   elevationRoughness: HTMLInputElement;
   elevationRoughnessValue: HTMLSpanElement;
-  maxHeightDelta: HTMLInputElement;
-  maxHeightDeltaValue: HTMLSpanElement;
-  rampRatio: HTMLInputElement;
-  rampRatioValue: HTMLSpanElement;
-  stairSteps: HTMLInputElement;
-  stairStepsValue: HTMLSpanElement;
-  rampWidth: HTMLInputElement;
-  rampWidthValue: HTMLSpanElement;
   wallHeight: HTMLInputElement;
   wallHeightValue: HTMLSpanElement;
-  wallThickness: HTMLInputElement;
-  wallThicknessValue: HTMLSpanElement;
   showMarkers: HTMLInputElement;
   showCheat: HTMLInputElement;
+  exportObj: HTMLButtonElement;
+  exportGlb: HTMLButtonElement;
   exportScreenshot: HTMLButtonElement;
 };
 
@@ -104,6 +96,10 @@ function isDiv(element: Element): element is HTMLDivElement {
 
 function isSpan(element: Element): element is HTMLSpanElement {
   return element instanceof HTMLSpanElement;
+}
+
+function isUl(element: Element): element is HTMLUListElement {
+  return element instanceof HTMLUListElement;
 }
 
 function isSelect(element: Element): element is HTMLSelectElement {
@@ -260,9 +256,6 @@ const ui: UiRefs = {
   handleTop: requiredElement('ui-handle', isDiv),
   handleBottom: requiredElement('ui-handle-bottom', isDiv),
   collapseToggle: requiredElement('collapse-toggle', isButton),
-  generateMaze: requiredElement('generate-maze', isButton),
-  randomizeSeed: requiredElement('randomize-seed', isButton),
-  mazeStats: requiredElement('maze-stats', isDiv),
   width: requiredElement('maze-width', isInput),
   widthValue: requiredElement('maze-width-value', isSpan),
   length: requiredElement('maze-length', isInput),
@@ -270,6 +263,8 @@ const ui: UiRefs = {
   seed: requiredElement('maze-seed', isInput),
   seedValue: requiredElement('maze-seed-value', isSpan),
   algorithm: requiredElement('maze-algorithm', isSelect),
+  algorithmTrigger: requiredElement('maze-algorithm-trigger', isButton),
+  algorithmMenu: requiredElement('maze-algorithm-menu', isUl),
   loopChance: requiredElement('loop-chance', isInput),
   loopChanceValue: requiredElement('loop-chance-value', isSpan),
   corridorBias: requiredElement('corridor-bias', isInput),
@@ -288,20 +283,12 @@ const ui: UiRefs = {
   heightScaleValue: requiredElement('height-scale-value', isSpan),
   elevationRoughness: requiredElement('elevation-roughness', isInput),
   elevationRoughnessValue: requiredElement('elevation-roughness-value', isSpan),
-  maxHeightDelta: requiredElement('max-height-delta', isInput),
-  maxHeightDeltaValue: requiredElement('max-height-delta-value', isSpan),
-  rampRatio: requiredElement('ramp-ratio', isInput),
-  rampRatioValue: requiredElement('ramp-ratio-value', isSpan),
-  stairSteps: requiredElement('stair-steps', isInput),
-  stairStepsValue: requiredElement('stair-steps-value', isSpan),
-  rampWidth: requiredElement('ramp-width', isInput),
-  rampWidthValue: requiredElement('ramp-width-value', isSpan),
   wallHeight: requiredElement('wall-height', isInput),
   wallHeightValue: requiredElement('wall-height-value', isSpan),
-  wallThickness: requiredElement('wall-thickness', isInput),
-  wallThicknessValue: requiredElement('wall-thickness-value', isSpan),
   showMarkers: requiredElement('show-markers', isInput),
   showCheat: requiredElement('show-cheat', isInput),
+  exportObj: requiredElement('export-obj', isButton),
+  exportGlb: requiredElement('export-glb', isButton),
   exportScreenshot: requiredElement('export-screenshot', isButton),
 };
 
@@ -325,7 +312,7 @@ let fillLight: DirectionalLight;
 let rimLight: DirectionalLight;
 let graph: MazeGraph;
 let mazeGroup: Group;
-let screenshotExportCount = 0;
+let fileExportCount = 0;
 let draggingPanel = false;
 const dragOffset = { x: 0, y: 0 };
 
@@ -335,22 +322,90 @@ function getRenderSettings() {
     wallThickness: settings.wallThickness,
     wallHeight: settings.wallHeight,
     heightScale: settings.heightScale,
-    rampRatio: settings.rampRatio,
-    rampWidth: settings.rampWidth,
-    stairSteps: settings.stairSteps,
     showMarkers,
     showCheat,
   };
-}
-
-function updateStats(): void {
-  ui.mazeStats.textContent = `${getAlgorithmLabel(settings.algorithm)} | Cells ${graph.metadata.cellCount} | Links ${graph.metadata.linkCount} | Levels ${graph.metadata.minElevation}-${graph.metadata.maxElevation}`;
 }
 
 function syncAlgorithmControls(): void {
   document.querySelectorAll<HTMLElement>('[data-algorithm-control]').forEach((element) => {
     element.hidden = element.dataset.algorithmControl !== settings.algorithm;
   });
+}
+
+function isMazeAlgorithm(value: string): value is MazeAlgorithm {
+  return value === 'dfs' || value === 'prim' || value === 'kruskal' || value === 'division';
+}
+
+function setAlgorithmSelection(algorithm: MazeAlgorithm): void {
+  const option = Array.from(ui.algorithm.options).find((candidate) => candidate.value === algorithm);
+  ui.algorithm.value = algorithm;
+  ui.algorithmTrigger.textContent = option?.textContent ?? algorithm;
+  ui.algorithmMenu.querySelectorAll<HTMLButtonElement>('.select-option').forEach((button) => {
+    button.classList.toggle('is-selected', button.dataset.algorithm === algorithm);
+  });
+}
+
+function openAlgorithmMenu(): void {
+  ui.algorithmMenu.hidden = false;
+  ui.algorithmTrigger.closest('.select-control')?.classList.add('is-open');
+}
+
+function closeAlgorithmMenu(): void {
+  ui.algorithmMenu.hidden = true;
+  ui.algorithmTrigger.closest('.select-control')?.classList.remove('is-open');
+}
+
+function toggleAlgorithmMenu(): void {
+  if (ui.algorithmMenu.hidden) {
+    openAlgorithmMenu();
+  } else {
+    closeAlgorithmMenu();
+  }
+}
+
+function applyAlgorithmSelection(value: string): void {
+  if (!isMazeAlgorithm(value)) {
+    return;
+  }
+  if (value === settings.algorithm) {
+    setAlgorithmSelection(value);
+    closeAlgorithmMenu();
+    return;
+  }
+  settings = normalizeSettings({ ...settings, algorithm: value });
+  setAlgorithmSelection(settings.algorithm);
+  syncAlgorithmControls();
+  rebuildMaze();
+  closeAlgorithmMenu();
+}
+
+function bindAlgorithmSelect(): void {
+  ui.algorithmMenu.replaceChildren();
+  Array.from(ui.algorithm.options).forEach((option) => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'select-option';
+    button.dataset.algorithm = option.value;
+    button.textContent = option.textContent;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      applyAlgorithmSelection(option.value);
+    });
+    item.append(button);
+    ui.algorithmMenu.append(item);
+  });
+
+  ui.algorithmTrigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleAlgorithmMenu();
+  });
+  ui.algorithm.addEventListener('change', () => {
+    applyAlgorithmSelection(ui.algorithm.value);
+  });
+  window.addEventListener('click', closeAlgorithmMenu);
+  setAlgorithmSelection(settings.algorithm);
 }
 
 function syncStudioLighting(): void {
@@ -398,14 +453,38 @@ function rebuildMaze(): void {
   }
   mazeGroup = createMazeGroup(graph, getRenderSettings());
   scene.add(mazeGroup);
-  updateStats();
   syncStudioLighting();
 }
 
-function nextScreenshotName(): string {
-  screenshotExportCount += 1;
-  const serial = String(screenshotExportCount).padStart(3, '0');
-  return `${EXPORT_BASE_NAME}_${serial}.png`;
+function nextExportName(extension: 'glb' | 'obj' | 'png'): string {
+  fileExportCount += 1;
+  const serial = String(fileExportCount).padStart(3, '0');
+  return `${EXPORT_BASE_NAME}_${serial}.${extension}`;
+}
+
+function exportObj(): void {
+  const mesh = getMazeMeshFromGroup(mazeGroup);
+  if (!mesh) {
+    return;
+  }
+  const contents = exportMazeMeshToObj(mesh);
+  downloadBlob(new Blob([contents], { type: 'text/plain;charset=utf-8' }), nextExportName('obj'));
+}
+
+async function exportGlb(): Promise<void> {
+  const mesh = getMazeMeshFromGroup(mazeGroup);
+  if (!mesh) {
+    return;
+  }
+  ui.exportGlb.disabled = true;
+  try {
+    const result = await exportMazeMeshToGlb(mesh);
+    downloadBlob(new Blob([result], { type: 'model/gltf-binary' }), nextExportName('glb'));
+  } catch (error) {
+    console.error('Failed to export GLB.', error);
+  } finally {
+    ui.exportGlb.disabled = false;
+  }
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -423,7 +502,7 @@ function exportScreenshot(): void {
     if (!blob) {
       return;
     }
-    downloadBlob(blob, nextScreenshotName());
+    downloadBlob(blob, nextExportName('png'));
   }, 'image/png');
 }
 
@@ -552,45 +631,12 @@ function bindControls(): void {
     settings = normalizeSettings({ ...settings, elevationRoughness: value });
     rebuildMaze();
   });
-  bindRange(ui.maxHeightDelta, ui.maxHeightDeltaValue, formatInteger, (value) => {
-    settings = normalizeSettings({ ...settings, maxHeightDelta: Math.round(value) });
-    rebuildMaze();
-  });
-  bindRange(ui.rampRatio, ui.rampRatioValue, formatFixed(2), (value) => {
-    settings = normalizeSettings({ ...settings, rampRatio: value });
-    rebuildMaze();
-  });
-  bindRange(ui.stairSteps, ui.stairStepsValue, formatInteger, (value) => {
-    settings = normalizeSettings({ ...settings, stairSteps: Math.round(value) });
-    rebuildMaze();
-  });
-  bindRange(ui.rampWidth, ui.rampWidthValue, formatFixed(2), (value) => {
-    settings = normalizeSettings({ ...settings, rampWidth: value });
-    rebuildMaze();
-  });
   bindRange(ui.wallHeight, ui.wallHeightValue, formatFixed(2), (value) => {
     settings = normalizeSettings({ ...settings, wallHeight: value });
     rebuildMaze();
   });
-  bindRange(ui.wallThickness, ui.wallThicknessValue, formatFixed(2), (value) => {
-    settings = normalizeSettings({ ...settings, wallThickness: value });
-    rebuildMaze();
-  });
 
-  ui.algorithm.addEventListener('change', () => {
-    settings = normalizeSettings({ ...settings, algorithm: ui.algorithm.value as MazeAlgorithm });
-    syncAlgorithmControls();
-    rebuildMaze();
-  });
-  ui.generateMaze.addEventListener('click', () => {
-    rebuildMaze();
-  });
-  ui.randomizeSeed.addEventListener('click', () => {
-    const nextSeed = 1 + Math.floor(Math.random() * 999999);
-    settings = normalizeSettings({ ...settings, seed: nextSeed });
-    setRangeValue(ui.seed, ui.seedValue, settings.seed, formatInteger);
-    rebuildMaze();
-  });
+  bindAlgorithmSelect();
   ui.showMarkers.addEventListener('change', () => {
     showMarkers = ui.showMarkers.checked;
     rebuildMaze();
@@ -598,6 +644,10 @@ function bindControls(): void {
   ui.showCheat.addEventListener('change', () => {
     showCheat = ui.showCheat.checked;
     rebuildMaze();
+  });
+  ui.exportObj.addEventListener('click', exportObj);
+  ui.exportGlb.addEventListener('click', () => {
+    void exportGlb();
   });
   ui.exportScreenshot.addEventListener('click', exportScreenshot);
   ui.collapseToggle.addEventListener('pointerdown', (event) => {
@@ -678,7 +728,6 @@ function initApp(): void {
   bindPanelDrag();
   bindControls();
   syncAlgorithmControls();
-  updateStats();
   syncStudioLighting();
   frameCamera();
   handleResize();

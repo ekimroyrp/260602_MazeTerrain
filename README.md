@@ -1,14 +1,15 @@
 # 260602_MazeTerrain
 
-260602_MazeTerrain is an interactive Three.js maze terrain generator. It builds connected grid mazes with multiple algorithm styles, applies seeded elevation so the maze rises and falls like a blocky hilly terrain, and renders the result as a white studio-lit mesh with stairs and ramps on a black background.
+260602_MazeTerrain is an interactive Three.js maze terrain generator. It builds connected grid mazes with multiple algorithm styles, applies seeded elevation so the maze rises and falls like a blocky hilly terrain, and renders the result as a white studio-lit mesh with dynamic stairs on a black background.
 
 ## Features
 
 - Vite, TypeScript, and Three.js app scaffold.
 - 2.5D maze generation with DFS backtracker, Prim, Kruskal, and recursive division algorithms.
-- Seeded width, length, loop chance, terrain levels, roughness, height scale, wall, stair, and ramp controls.
+- Seeded width, length, loop chance, wall height, terrain levels, roughness, and height scale controls.
+- Stairs are generated automatically for every height transition using a fixed width and dynamic step count.
 - Draggable collapsible control panel based on the WoolyPaths UI style.
-- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end markers, red solution-path overlay, and screenshot export.
+- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end markers, red solution-path overlay, mesh export, and screenshot export.
 
 ## Getting Started
 
@@ -23,8 +24,8 @@
 - Mouse wheel zooms the camera with an extended zoom-out range.
 - Middle mouse pans the camera.
 - Right mouse orbits the camera above or below the maze.
-- Use the Generate and Random Seed buttons to rebuild the maze.
+- Change the seed slider to rebuild a different deterministic maze.
 - Changing settings rebuilds the maze without resetting the current camera view.
-- Adjust algorithm, terrain, transition, and render sliders from the control panel.
-- Toggle Cheat to draw a red 3D start-to-end solution path that follows flat paths, ramps, and stair heights.
-- Use Screenshot to export the current canvas.
+- Adjust maze type, extents, maze, and terrain controls from the control panel.
+- Toggle Cheat to draw a red 3D start-to-end solution path that follows flat paths and stair heights.
+- Use the Export section to save the maze mesh as OBJ or GLB, or save the current canvas as a screenshot.

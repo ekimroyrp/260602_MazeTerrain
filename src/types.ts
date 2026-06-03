@@ -21,9 +21,6 @@ export type MazeSettings = {
   heightScale: number;
   elevationRoughness: number;
   maxHeightDelta: number;
-  rampRatio: number;
-  stairSteps: number;
-  rampWidth: number;
   loopChance: number;
   corridorBias: number;
   frontierRandomness: number;
@@ -59,7 +56,7 @@ export type MazeGraph = {
 
 export type MazeRenderSettings = Pick<
   MazeSettings,
-  'cellSize' | 'wallThickness' | 'wallHeight' | 'heightScale' | 'rampRatio' | 'rampWidth' | 'stairSteps'
+  'cellSize' | 'wallThickness' | 'wallHeight' | 'heightScale'
 > & {
   showMarkers: boolean;
   showCheat: boolean;
