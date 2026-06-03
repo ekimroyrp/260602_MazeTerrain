@@ -3,6 +3,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   ConeGeometry,
+  CylinderGeometry,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -17,6 +18,7 @@ const FOUNDATION_THICKNESS = 0.28;
 const CONNECTOR_THICKNESS = 0.12;
 const RAMP_THICKNESS = 0.08;
 const MARKER_GOLD = 0xd8aa2f;
+const MARKER_AMBER = 0xf0c748;
 const MAZE_WHITE = 0xe9e9e3;
 
 type WorldCell = {
@@ -240,9 +242,16 @@ export function createMazeTerrainGeometry(graph: MazeGraph, settings: MazeRender
   return merged;
 }
 
-function createMarker(graph: MazeGraph, point: GridPoint, settings: MazeRenderSettings, goldMaterial: MeshStandardMaterial): Group {
+function createMarker(
+  graph: MazeGraph,
+  point: GridPoint,
+  settings: MazeRenderSettings,
+  markerMaterial: MeshStandardMaterial,
+  kind: 'start' | 'end',
+): Group {
   const cell = getCell(graph, point.x, point.y);
   const group = new Group();
+  group.name = `${kind}-marker`;
   if (!cell) {
     return group;
   }
@@ -254,10 +263,14 @@ function createMarker(graph: MazeGraph, point: GridPoint, settings: MazeRenderSe
   base.castShadow = true;
   base.receiveShadow = true;
 
-  const markerGeometry = new ConeGeometry(settings.cellSize * 0.12, settings.cellSize * 0.46, 5);
-  const marker = new Mesh(markerGeometry, goldMaterial);
-  marker.position.set(world.x, world.top + settings.cellSize * 0.27, world.z);
-  marker.rotation.y = (point.x + point.y) * 0.35;
+  const markerGeometry =
+    kind === 'start'
+      ? new CylinderGeometry(settings.cellSize * 0.11, settings.cellSize * 0.14, settings.cellSize * 0.38, 5)
+      : new ConeGeometry(settings.cellSize * 0.15, settings.cellSize * 0.52, 5);
+  const marker = new Mesh(markerGeometry, markerMaterial);
+  marker.name = `${kind}-marker-form`;
+  marker.position.set(world.x, world.top + (kind === 'start' ? settings.cellSize * 0.23 : settings.cellSize * 0.29), world.z);
+  marker.rotation.y = kind === 'start' ? Math.PI * 0.25 : Math.PI * 0.55 + (point.x + point.y) * 0.12;
   marker.castShadow = true;
   marker.receiveShadow = true;
 
@@ -295,13 +308,18 @@ export function createMazeGroup(graph: MazeGraph, settings: MazeRenderSettings):
   group.add(ground);
 
   if (settings.showMarkers) {
-    const goldMaterial = new MeshStandardMaterial({
+    const startMaterial = new MeshStandardMaterial({
+      color: MARKER_AMBER,
+      metalness: 0.12,
+      roughness: 0.5,
+    });
+    const endMaterial = new MeshStandardMaterial({
       color: MARKER_GOLD,
       metalness: 0.14,
       roughness: 0.48,
     });
-    group.add(createMarker(graph, graph.start, settings, goldMaterial));
-    group.add(createMarker(graph, graph.end, settings, goldMaterial));
+    group.add(createMarker(graph, graph.start, settings, startMaterial, 'start'));
+    group.add(createMarker(graph, graph.end, settings, endMaterial, 'end'));
   }
 
   return group;

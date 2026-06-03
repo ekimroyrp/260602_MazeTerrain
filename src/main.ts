@@ -6,10 +6,10 @@ import {
   Group,
   HemisphereLight,
   MOUSE,
-  PCFShadowMap,
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
+  VSMShadowMap,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -624,6 +624,7 @@ function addStudioLighting(): void {
   keyLight.shadow.mapSize.set(2048, 2048);
   keyLight.shadow.bias = -0.00018;
   keyLight.shadow.normalBias = 0.035;
+  keyLight.shadow.blurSamples = 8;
   scene.add(keyLight.target, keyLight);
 
   fillLight = new DirectionalLight(0xb7caff, 0.62);
@@ -645,7 +646,7 @@ function initApp(): void {
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFShadowMap;
+  renderer.shadowMap.type = VSMShadowMap;
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;

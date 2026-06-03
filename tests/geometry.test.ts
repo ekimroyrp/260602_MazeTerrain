@@ -49,6 +49,19 @@ describe('maze geometry', () => {
     });
 
     expect(meshCount).toBeGreaterThanOrEqual(5);
+    expect(group.getObjectByName('start-marker')).toBeDefined();
+    expect(group.getObjectByName('end-marker')).toBeDefined();
+    expect(group.getObjectByName('start-marker-form')).toBeDefined();
+    expect(group.getObjectByName('end-marker-form')).toBeDefined();
+    disposeMazeGroup(group);
+  });
+
+  it('omits start and end markers when markers are disabled', () => {
+    const group = createMazeGroup(graph, { ...renderSettings, showMarkers: false });
+
+    expect(group.getObjectByName('start-marker')).toBeUndefined();
+    expect(group.getObjectByName('end-marker')).toBeUndefined();
+
     disposeMazeGroup(group);
   });
 });
