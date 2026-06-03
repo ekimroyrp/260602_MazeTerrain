@@ -12,6 +12,7 @@ import {
   VSMShadowMap,
   WebGLRenderer,
 } from 'three';
+import type { Material, MeshStandardMaterial } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { exportMazeMeshToGlb, exportMazeMeshToObj, getMazeMeshFromGroup } from './core/exporters';
 import { createMazeGroup, disposeMazeGroup } from './core/geometry';
@@ -50,6 +51,9 @@ type UiRefs = {
   heightScaleValue: HTMLSpanElement;
   elevationRoughness: HTMLInputElement;
   elevationRoughnessValue: HTMLSpanElement;
+  floorColor: HTMLInputElement;
+  stairColor: HTMLInputElement;
+  wallColor: HTMLInputElement;
   wallHeight: HTMLInputElement;
   wallHeightValue: HTMLSpanElement;
   showMarkers: HTMLInputElement;
@@ -283,6 +287,9 @@ const ui: UiRefs = {
   heightScaleValue: requiredElement('height-scale-value', isSpan),
   elevationRoughness: requiredElement('elevation-roughness', isInput),
   elevationRoughnessValue: requiredElement('elevation-roughness-value', isSpan),
+  floorColor: requiredElement('floor-color', isInput),
+  stairColor: requiredElement('stair-color', isInput),
+  wallColor: requiredElement('wall-color', isInput),
   wallHeight: requiredElement('wall-height', isInput),
   wallHeightValue: requiredElement('wall-height-value', isSpan),
   showMarkers: requiredElement('show-markers', isInput),
@@ -322,6 +329,9 @@ function getRenderSettings() {
     wallThickness: settings.wallThickness,
     wallHeight: settings.wallHeight,
     heightScale: settings.heightScale,
+    floorColor: ui.floorColor.value,
+    stairColor: ui.stairColor.value,
+    wallColor: ui.wallColor.value,
     showMarkers,
     showCheat,
   };
@@ -454,6 +464,27 @@ function rebuildMaze(): void {
   mazeGroup = createMazeGroup(graph, getRenderSettings());
   scene.add(mazeGroup);
   syncStudioLighting();
+}
+
+function updateDisplayColors(): void {
+  const mesh = getMazeMeshFromGroup(mazeGroup);
+  if (!mesh || !Array.isArray(mesh.material)) {
+    return;
+  }
+
+  const materials = mesh.material as Material[];
+  const colorSlots: Array<[number, string]> = [
+    [0, ui.floorColor.value],
+    [1, ui.stairColor.value],
+    [2, ui.wallColor.value],
+  ];
+
+  for (const [index, color] of colorSlots) {
+    const material = materials[index];
+    if (material && 'color' in material) {
+      (material as MeshStandardMaterial).color.set(color);
+    }
+  }
 }
 
 function nextExportName(extension: 'glb' | 'obj' | 'png'): string {
@@ -635,6 +666,9 @@ function bindControls(): void {
     settings = normalizeSettings({ ...settings, wallHeight: value });
     rebuildMaze();
   });
+  ui.floorColor.addEventListener('input', updateDisplayColors);
+  ui.stairColor.addEventListener('input', updateDisplayColors);
+  ui.wallColor.addEventListener('input', updateDisplayColors);
 
   bindAlgorithmSelect();
   ui.showMarkers.addEventListener('change', () => {

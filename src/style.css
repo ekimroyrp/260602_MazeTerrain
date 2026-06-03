@@ -233,6 +233,10 @@ body {
   gap: 6px;
 }
 
+.control.compact {
+  gap: 4px;
+}
+
 .control-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -301,6 +305,50 @@ body {
 
 .toggle-control input[type="checkbox"]:checked::after {
   transform: translateX(14px);
+}
+
+.color-picker {
+  width: 100%;
+  min-height: 30px;
+  padding: 3px;
+  border: 1px solid var(--button-stroke);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker::-webkit-color-swatch,
+.color-picker::-moz-color-swatch {
+  border: none;
+  border-radius: 7px;
+}
+
+.color-picker:focus {
+  outline: none;
+}
+
+.color-picker:focus-visible {
+  outline: 1px solid rgba(203, 217, 255, 0.48);
+  outline-offset: 1px;
+}
+
+input[type="color"].color-picker {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="color"].color-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 7px;
+}
+
+input[type="color"].color-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: 7px;
 }
 
 [id$="-value"] {

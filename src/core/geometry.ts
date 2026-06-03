@@ -30,6 +30,9 @@ const CHEAT_RED = 0xe3342f;
 const CHEAT_EMISSIVE = 0x7a0603;
 const CHEAT_PATH_LIFT = 0.13;
 const CHEAT_PATH_RADIUS_RATIO = 0.04;
+const FLOOR_MATERIAL_INDEX = 0;
+const STAIR_MATERIAL_INDEX = 1;
+const WALL_MATERIAL_INDEX = 2;
 
 type WorldCell = {
   x: number;
@@ -49,10 +52,62 @@ type SideSegment = {
   to: number;
 };
 
+type TerrainGeometryBuckets = {
+  floor: BufferGeometry[];
+  stair: BufferGeometry[];
+  wall: BufferGeometry[];
+};
+
 function disposeGeometryList(geometries: BufferGeometry[]): void {
   for (const geometry of geometries) {
     geometry.dispose();
   }
+}
+
+function mergeGeometryBucket(geometries: BufferGeometry[]): BufferGeometry | null {
+  if (geometries.length === 0) {
+    return null;
+  }
+  const merged = mergeGeometries(geometries, false);
+  disposeGeometryList(geometries);
+  return merged;
+}
+
+function mergeTerrainGeometryBuckets(buckets: TerrainGeometryBuckets): BufferGeometry | null {
+  const materialGeometries: Array<{ geometry: BufferGeometry; materialIndex: number }> = [];
+  const floor = mergeGeometryBucket(buckets.floor);
+  const stair = mergeGeometryBucket(buckets.stair);
+  const wall = mergeGeometryBucket(buckets.wall);
+
+  if (floor) {
+    materialGeometries.push({ geometry: floor, materialIndex: FLOOR_MATERIAL_INDEX });
+  }
+  if (stair) {
+    materialGeometries.push({ geometry: stair, materialIndex: STAIR_MATERIAL_INDEX });
+  }
+  if (wall) {
+    materialGeometries.push({ geometry: wall, materialIndex: WALL_MATERIAL_INDEX });
+  }
+
+  const merged = mergeGeometries(
+    materialGeometries.map(({ geometry }) => geometry),
+    false,
+  );
+  if (merged) {
+    let groupStart = 0;
+    merged.clearGroups();
+    for (const { geometry, materialIndex } of materialGeometries) {
+      const position = geometry.getAttribute('position');
+      const count = position ? position.count : 0;
+      if (count > 0) {
+        merged.addGroup(groupStart, count, materialIndex);
+      }
+      groupStart += count;
+    }
+  }
+
+  disposeGeometryList(materialGeometries.map(({ geometry }) => geometry));
+  return merged;
 }
 
 function createBox(width: number, height: number, depth: number, x: number, y: number, z: number): BufferGeometry {
@@ -350,7 +405,7 @@ function addStairs(
 }
 
 function addHeightConnector(
-  geometries: BufferGeometry[],
+  buckets: TerrainGeometryBuckets,
   graph: MazeGraph,
   cell: MazeCell,
   next: MazeCell,
@@ -361,22 +416,26 @@ function addHeightConnector(
   const nextWorld = getWorldCell(graph, next, settings);
   const heightDelta = nextWorld.top - currentWorld.top;
   if (Math.abs(heightDelta) <= 1e-6) {
-    addFlatConnector(geometries, currentWorld, nextWorld, direction, settings);
+    addFlatConnector(buckets.floor, currentWorld, nextWorld, direction, settings);
     return;
   }
 
   const low = heightDelta > 0 ? currentWorld : nextWorld;
   const high = heightDelta > 0 ? nextWorld : currentWorld;
-  addStairs(geometries, low, high, direction, settings);
+  addStairs(buckets.stair, low, high, direction, settings);
 }
 
 export function createMazeTerrainGeometry(graph: MazeGraph, settings: MazeRenderSettings): BufferGeometry {
-  const geometries: BufferGeometry[] = [];
+  const buckets: TerrainGeometryBuckets = {
+    floor: [],
+    stair: [],
+    wall: [],
+  };
   for (const cell of graph.cells) {
-    addPlatformGeometry(geometries, graph, cell, settings);
+    addPlatformGeometry(buckets.floor, graph, cell, settings);
   }
   for (const cell of graph.cells) {
-    addWallGeometry(geometries, graph, cell, settings);
+    addWallGeometry(buckets.wall, graph, cell, settings);
   }
   for (const cell of graph.cells) {
     for (const direction of cell.links) {
@@ -388,12 +447,11 @@ export function createMazeTerrainGeometry(graph: MazeGraph, settings: MazeRender
       if (!next) {
         continue;
       }
-      addHeightConnector(geometries, graph, cell, next, direction, settings);
+      addHeightConnector(buckets, graph, cell, next, direction, settings);
     }
   }
 
-  const merged = mergeGeometries(geometries, false);
-  disposeGeometryList(geometries);
+  const merged = mergeTerrainGeometryBuckets(buckets);
   if (!merged) {
     return new BufferGeometry();
   }
@@ -555,11 +613,23 @@ export function createMazeGroup(graph: MazeGraph, settings: MazeRenderSettings):
   group.name = 'maze-terrain';
 
   const terrainGeometry = createMazeTerrainGeometry(graph, settings);
-  const terrainMaterial = new MeshStandardMaterial({
-    color: MAZE_WHITE,
-    metalness: 0.02,
-    roughness: 0.74,
-  });
+  const terrainMaterial = [
+    new MeshStandardMaterial({
+      color: settings.floorColor,
+      metalness: 0.02,
+      roughness: 0.74,
+    }),
+    new MeshStandardMaterial({
+      color: settings.stairColor,
+      metalness: 0.02,
+      roughness: 0.74,
+    }),
+    new MeshStandardMaterial({
+      color: settings.wallColor,
+      metalness: 0.02,
+      roughness: 0.74,
+    }),
+  ];
   const terrain = new Mesh(terrainGeometry, terrainMaterial);
   terrain.name = 'maze-mesh';
   terrain.castShadow = true;

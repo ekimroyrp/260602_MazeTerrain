@@ -6,10 +6,10 @@
 
 - Vite, TypeScript, and Three.js app scaffold.
 - 2.5D maze generation with DFS backtracker, Prim, Kruskal, and recursive division algorithms.
-- Seeded width, length, loop chance, wall height, terrain levels, roughness, and height scale controls.
+- Seeded width, length, loop chance, wall height, terrain levels, roughness, height scale, and display color controls.
 - Stairs are generated automatically for every height transition using a fixed width and dynamic step count.
 - Draggable collapsible control panel based on the WoolyPaths UI style.
-- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end markers, red solution-path overlay, mesh export, and screenshot export.
+- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end indicators, red solution-path overlay, color-preserving mesh export, and screenshot export.
 
 ## Getting Started
 
@@ -26,6 +26,7 @@
 - Right mouse orbits the camera above or below the maze.
 - Change the seed slider to rebuild a different deterministic maze.
 - Changing settings rebuilds the maze without resetting the current camera view.
-- Adjust maze type, extents, maze, and terrain controls from the control panel.
+- Adjust maze type, extents, maze, terrain, and display color controls from the control panel.
+- Toggle Ends to show or hide the start and end indicators.
 - Toggle Cheat to draw a red 3D start-to-end solution path that follows flat paths and stair heights.
-- Use the Export section to save the maze mesh as OBJ or GLB, or save the current canvas as a screenshot.
+- Use the Export section to save the maze mesh as OBJ or GLB with vertex colors, or save the current canvas as a screenshot.

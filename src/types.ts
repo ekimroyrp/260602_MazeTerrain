@@ -58,6 +58,9 @@ export type MazeRenderSettings = Pick<
   MazeSettings,
   'cellSize' | 'wallThickness' | 'wallHeight' | 'heightScale'
 > & {
+  floorColor: string;
+  stairColor: string;
+  wallColor: string;
   showMarkers: boolean;
   showCheat: boolean;
 };

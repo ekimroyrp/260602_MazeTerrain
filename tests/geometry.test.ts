@@ -1,4 +1,4 @@
-import { Mesh } from 'three';
+import { Mesh, MeshStandardMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { exportMazeMeshToGlb, exportMazeMeshToObj, getMazeMeshFromGroup } from '../src/core/exporters';
 import { createMazeGroup, createMazeTerrainGeometry, disposeMazeGroup } from '../src/core/geometry';
@@ -19,6 +19,22 @@ if (!('FileReader' in globalThis)) {
   Object.defineProperty(globalThis, 'FileReader', { value: TestFileReader });
 }
 
+function getObjVertexColors(contents: string): string[] {
+  return contents
+    .split('\n')
+    .filter((line) => line.startsWith('v '))
+    .map((line) => line.trim().split(/\s+/).slice(4, 7).join(' '));
+}
+
+function getGlbJson(contents: ArrayBuffer): Record<string, unknown> {
+  const view = new DataView(contents);
+  const jsonLength = view.getUint32(12, true);
+  const jsonType = view.getUint32(16, true);
+  expect(jsonType).toBe(0x4e4f534a);
+  const jsonBytes = new Uint8Array(contents, 20, jsonLength);
+  return JSON.parse(new TextDecoder().decode(jsonBytes).trim()) as Record<string, unknown>;
+}
+
 const graph = generateMaze({
   ...DEFAULT_SETTINGS,
   width: 8,
@@ -33,6 +49,9 @@ const renderSettings = {
   wallThickness: graph.settings.wallThickness,
   wallHeight: graph.settings.wallHeight,
   heightScale: graph.settings.heightScale,
+  floorColor: '#e9e9e3',
+  stairColor: '#b2b2ae',
+  wallColor: '#b2b2ae',
   showMarkers: true,
   showCheat: false,
 };
@@ -202,6 +221,32 @@ describe('maze geometry', () => {
     disposeMazeGroup(group);
   });
 
+  it('assigns display colors to floor, stair, and wall material groups', () => {
+    const transitionGraph = createTransitionGraph();
+    const group = createMazeGroup(transitionGraph, {
+      ...renderSettings,
+      floorColor: '#ff0000',
+      stairColor: '#00ff00',
+      wallColor: '#0000ff',
+      heightScale: 0.5,
+      showMarkers: false,
+    });
+    const mesh = getMazeMeshFromGroup(group);
+
+    expect(mesh).toBeInstanceOf(Mesh);
+    if (mesh instanceof Mesh) {
+      expect(Array.isArray(mesh.material)).toBe(true);
+      const materials = mesh.material as MeshStandardMaterial[];
+      expect(materials).toHaveLength(3);
+      expect(materials[0].color.getHexString()).toBe('ff0000');
+      expect(materials[1].color.getHexString()).toBe('00ff00');
+      expect(materials[2].color.getHexString()).toBe('0000ff');
+      expect(mesh.geometry.groups.map((groupInfo) => groupInfo.materialIndex)).toEqual(expect.arrayContaining([0, 1, 2]));
+    }
+
+    disposeMazeGroup(group);
+  });
+
   it('omits start and end markers when markers are disabled', () => {
     const group = createMazeGroup(graph, { ...renderSettings, showMarkers: false });
 
@@ -227,16 +272,27 @@ describe('maze geometry', () => {
   });
 
   it('exports only the terrain mesh to OBJ', () => {
-    const group = createMazeGroup(graph, { ...renderSettings, showCheat: true, showMarkers: true });
+    const group = createMazeGroup(graph, {
+      ...renderSettings,
+      floorColor: '#ff0000',
+      stairColor: '#00ff00',
+      wallColor: '#0000ff',
+      showCheat: true,
+      showMarkers: true,
+    });
     const mesh = getMazeMeshFromGroup(group);
 
     expect(mesh).toBeInstanceOf(Mesh);
     if (mesh instanceof Mesh) {
       const contents = exportMazeMeshToObj(mesh);
+      const vertexColors = getObjVertexColors(contents);
       expect(contents).toContain('260602_MazeTerrain_maze_mesh');
       expect(contents).not.toContain('cheat-path');
       expect(contents).not.toContain('start-marker');
       expect(contents).not.toContain('end-marker');
+      expect(vertexColors).toContain('1 0 0');
+      expect(vertexColors).toContain('0 1 0');
+      expect(vertexColors).toContain('0 0 1');
       expect(contents.length).toBeGreaterThan(1000);
     }
 
@@ -244,14 +300,28 @@ describe('maze geometry', () => {
   });
 
   it('exports the terrain mesh to binary GLB', async () => {
-    const group = createMazeGroup(graph, { ...renderSettings, showCheat: true, showMarkers: true });
+    const group = createMazeGroup(graph, {
+      ...renderSettings,
+      floorColor: '#ff0000',
+      stairColor: '#00ff00',
+      wallColor: '#0000ff',
+      showCheat: true,
+      showMarkers: true,
+    });
     const mesh = getMazeMeshFromGroup(group);
 
     expect(mesh).toBeInstanceOf(Mesh);
     if (mesh instanceof Mesh) {
       const contents = await exportMazeMeshToGlb(mesh);
       const magic = new TextDecoder().decode(new Uint8Array(contents, 0, 4));
+      const json = getGlbJson(contents);
+      const jsonText = JSON.stringify(json);
       expect(magic).toBe('glTF');
+      expect(jsonText).toContain('COLOR_0');
+      expect(jsonText).toContain('260602_MazeTerrain_maze_mesh');
+      expect(jsonText).not.toContain('cheat-path');
+      expect(jsonText).not.toContain('start-marker');
+      expect(jsonText).not.toContain('end-marker');
       expect(contents.byteLength).toBeGreaterThan(1000);
     }
 
