@@ -8,7 +8,7 @@
 - 2.5D maze generation with DFS backtracker, Prim, Kruskal, and recursive division algorithms.
 - Seeded width, length, loop chance, terrain levels, roughness, height scale, wall, stair, and ramp controls.
 - Draggable collapsible control panel based on the WoolyPaths UI style.
-- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end markers, and screenshot export.
+- Studio lighting, soft shadows, unrestricted orbit camera controls, optional start/end markers, red solution-path overlay, and screenshot export.
 
 ## Getting Started
 
@@ -26,4 +26,5 @@
 - Use the Generate and Random Seed buttons to rebuild the maze.
 - Changing settings rebuilds the maze without resetting the current camera view.
 - Adjust algorithm, terrain, transition, and render sliders from the control panel.
+- Toggle Cheat to draw a red 3D start-to-end solution path that follows flat paths, ramps, and stair heights.
 - Use Screenshot to export the current canvas.

@@ -62,4 +62,5 @@ export type MazeRenderSettings = Pick<
   'cellSize' | 'wallThickness' | 'wallHeight' | 'heightScale' | 'rampRatio' | 'rampWidth' | 'stairSteps'
 > & {
   showMarkers: boolean;
+  showCheat: boolean;
 };

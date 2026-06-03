@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { MazeAlgorithm, MazeGraph } from '../src/types';
 import {
   DEFAULT_SETTINGS,
+  findSolutionPath,
   generateMaze,
+  getCell,
+  getDirectionDelta,
   getLinkedElevationViolations,
   getReachableCellKeys,
   hasPathBetween,
@@ -31,6 +34,27 @@ describe('maze generation', () => {
 
     expect(reachable.size).toBe(graph.cells.length);
     expect(hasPathBetween(graph, graph.start, graph.end)).toBe(true);
+  });
+
+  it.each(algorithms)('finds a linked start-to-end solution path for %s', (algorithm) => {
+    const graph = generateMaze({ ...DEFAULT_SETTINGS, width: 11, length: 9, seed: 97531, algorithm });
+    const path = findSolutionPath(graph);
+
+    expect(path[0]).toEqual(graph.start);
+    expect(path[path.length - 1]).toEqual(graph.end);
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const current = getCell(graph, path[index].x, path[index].y);
+      expect(current).not.toBeNull();
+      if (!current) {
+        throw new Error('solution path referenced a missing cell');
+      }
+      const next = path[index + 1];
+      const direction = current.links.find((link) => {
+        const delta = getDirectionDelta(link);
+        return current.x + delta.x === next.x && current.y + delta.y === next.y;
+      });
+      expect(direction).toBeDefined();
+    }
   });
 
   it.each(algorithms)('limits linked elevation deltas for %s', (algorithm) => {

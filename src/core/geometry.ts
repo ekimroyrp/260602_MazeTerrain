@@ -7,11 +7,13 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
+  SphereGeometry,
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Direction, GridPoint, MazeCell, MazeGraph, MazeRenderSettings } from '../types';
-import { getCell, getDirectionDelta } from './maze';
+import { findSolutionPath, getCell, getDirectionDelta } from './maze';
 
 const FOUNDATION_THICKNESS = 0.28;
 const CONNECTOR_THICKNESS = 0.12;
@@ -22,6 +24,10 @@ const TRANSITION_SURFACE_LIFT = 0.006;
 const MARKER_GOLD = 0xd8aa2f;
 const MARKER_AMBER = 0xf0c748;
 const MAZE_WHITE = 0xe9e9e3;
+const CHEAT_RED = 0xe3342f;
+const CHEAT_EMISSIVE = 0x7a0603;
+const CHEAT_PATH_LIFT = 0.13;
+const CHEAT_PATH_RADIUS_RATIO = 0.04;
 
 type WorldCell = {
   x: number;
@@ -53,6 +59,31 @@ function createBox(width: number, height: number, depth: number, x: number, y: n
   base.dispose();
   geometry.deleteAttribute('uv');
   geometry.translate(x, y, z);
+  return geometry;
+}
+
+function createSegmentCylinder(start: Vector3, end: Vector3, radius: number): BufferGeometry | null {
+  const direction = end.clone().sub(start);
+  const length = direction.length();
+  if (length <= 1e-5) {
+    return null;
+  }
+
+  const base = new CylinderGeometry(radius, radius, length, 10, 1, false);
+  const geometry = base.toNonIndexed();
+  base.dispose();
+  geometry.deleteAttribute('uv');
+  geometry.applyQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize()));
+  geometry.translate((start.x + end.x) * 0.5, (start.y + end.y) * 0.5, (start.z + end.z) * 0.5);
+  return geometry;
+}
+
+function createPathJoint(point: Vector3, radius: number): BufferGeometry {
+  const base = new SphereGeometry(radius * 1.16, 10, 6);
+  const geometry = base.toNonIndexed();
+  base.dispose();
+  geometry.deleteAttribute('uv');
+  geometry.translate(point.x, point.y, point.z);
   return geometry;
 }
 
@@ -456,6 +487,134 @@ function createMarker(
   return group;
 }
 
+function appendPathPoint(points: Vector3[], point: Vector3): void {
+  const last = points[points.length - 1];
+  if (last && last.distanceToSquared(point) < 1e-8) {
+    return;
+  }
+  points.push(point);
+}
+
+function getCheatPoint(x: number, z: number, top: number): Vector3 {
+  return new Vector3(x, top + CHEAT_PATH_LIFT, z);
+}
+
+function getStableTransitionCells(a: MazeCell, b: MazeCell): [MazeCell, MazeCell] {
+  if (a.y === b.y) {
+    return a.x < b.x ? [a, b] : [b, a];
+  }
+  return a.y < b.y ? [a, b] : [b, a];
+}
+
+function usesRampTransition(graph: MazeGraph, a: MazeCell, b: MazeCell, settings: MazeRenderSettings): boolean {
+  const [from, to] = getStableTransitionCells(a, b);
+  return stableTransitionValue(graph.settings.seed, from, to) < settings.rampRatio;
+}
+
+function addCheatLinkPoints(
+  points: Vector3[],
+  graph: MazeGraph,
+  current: MazeCell,
+  next: MazeCell,
+  settings: MazeRenderSettings,
+): void {
+  const currentWorld = getWorldCell(graph, current, settings);
+  const nextWorld = getWorldCell(graph, next, settings);
+  appendPathPoint(points, getCheatPoint(currentWorld.x, currentWorld.z, currentWorld.top));
+
+  if (Math.abs(currentWorld.top - nextWorld.top) <= 1e-6) {
+    const span = getTransitionSpan(currentWorld, nextWorld, settings);
+    appendPathPoint(points, getCheatPoint(span.start.x, span.start.z, currentWorld.top));
+    appendPathPoint(points, getCheatPoint(span.end.x, span.end.z, nextWorld.top));
+    appendPathPoint(points, getCheatPoint(nextWorld.x, nextWorld.z, nextWorld.top));
+    return;
+  }
+
+  const lowWorld = currentWorld.top < nextWorld.top ? currentWorld : nextWorld;
+  const highWorld = currentWorld.top < nextWorld.top ? nextWorld : currentWorld;
+  const travelingUp = currentWorld.top < nextWorld.top;
+  const span = getHeightTransitionSpan(lowWorld, highWorld, settings);
+  const transitionPoints: Vector3[] = [];
+
+  transitionPoints.push(getCheatPoint(span.start.x, span.start.z, lowWorld.top));
+  if (usesRampTransition(graph, current, next, settings)) {
+    transitionPoints.push(getCheatPoint(span.end.x, span.end.z, highWorld.top));
+  } else {
+    const steps = Math.max(1, Math.round(settings.stairSteps));
+    for (let index = 0; index < steps; index += 1) {
+      const positionRatio = (index + 0.5) / steps;
+      const heightRatio = steps === 1 ? 1 : index / (steps - 1);
+      const position = span.start.clone().lerp(span.end, positionRatio);
+      const top = lowWorld.top + (highWorld.top - lowWorld.top) * heightRatio;
+      transitionPoints.push(getCheatPoint(position.x, position.z, top));
+    }
+    transitionPoints.push(getCheatPoint(span.end.x, span.end.z, highWorld.top));
+  }
+
+  if (!travelingUp) {
+    transitionPoints.reverse();
+  }
+
+  for (const point of transitionPoints) {
+    appendPathPoint(points, point);
+  }
+  appendPathPoint(points, getCheatPoint(nextWorld.x, nextWorld.z, nextWorld.top));
+}
+
+function createCheatPathMesh(graph: MazeGraph, settings: MazeRenderSettings): Mesh | null {
+  const path = findSolutionPath(graph);
+  if (path.length < 2) {
+    return null;
+  }
+
+  const radius = Math.max(0.035, settings.cellSize * CHEAT_PATH_RADIUS_RATIO);
+  const points: Vector3[] = [];
+
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const current = getCell(graph, path[index].x, path[index].y);
+    const next = getCell(graph, path[index + 1].x, path[index + 1].y);
+    if (!current || !next) {
+      continue;
+    }
+    addCheatLinkPoints(points, graph, current, next, settings);
+  }
+  if (points.length < 2) {
+    return null;
+  }
+
+  const geometries: BufferGeometry[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const segment = createSegmentCylinder(points[index], points[index + 1], radius);
+    if (segment) {
+      geometries.push(segment);
+    }
+  }
+  for (const point of points) {
+    geometries.push(createPathJoint(point, radius));
+  }
+
+  const geometry = mergeGeometries(geometries, false);
+  disposeGeometryList(geometries);
+  if (!geometry) {
+    return null;
+  }
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const material = new MeshStandardMaterial({
+    color: CHEAT_RED,
+    emissive: CHEAT_EMISSIVE,
+    emissiveIntensity: 0.34,
+    metalness: 0.02,
+    roughness: 0.52,
+  });
+  const mesh = new Mesh(geometry, material);
+  mesh.name = 'cheat-path';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  return mesh;
+}
+
 export function createMazeGroup(graph: MazeGraph, settings: MazeRenderSettings): Group {
   const group = new Group();
   group.name = 'maze-terrain';
@@ -470,6 +629,13 @@ export function createMazeGroup(graph: MazeGraph, settings: MazeRenderSettings):
   terrain.castShadow = true;
   terrain.receiveShadow = true;
   group.add(terrain);
+
+  if (settings.showCheat) {
+    const cheatPath = createCheatPathMesh(graph, settings);
+    if (cheatPath) {
+      group.add(cheatPath);
+    }
+  }
 
   if (settings.showMarkers) {
     const startMaterial = new MeshStandardMaterial({

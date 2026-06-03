@@ -63,6 +63,7 @@ type UiRefs = {
   wallThickness: HTMLInputElement;
   wallThicknessValue: HTMLSpanElement;
   showMarkers: HTMLInputElement;
+  showCheat: HTMLInputElement;
   exportScreenshot: HTMLButtonElement;
 };
 
@@ -300,6 +301,7 @@ const ui: UiRefs = {
   wallThickness: requiredElement('wall-thickness', isInput),
   wallThicknessValue: requiredElement('wall-thickness-value', isSpan),
   showMarkers: requiredElement('show-markers', isInput),
+  showCheat: requiredElement('show-cheat', isInput),
   exportScreenshot: requiredElement('export-screenshot', isButton),
 };
 
@@ -313,6 +315,7 @@ let settings: MazeSettings = normalizeSettings({
   algorithm: ui.algorithm.value as MazeAlgorithm,
 });
 let showMarkers = ui.showMarkers.checked;
+let showCheat = ui.showCheat.checked;
 let scene: Scene;
 let camera: PerspectiveCamera;
 let renderer: WebGLRenderer;
@@ -336,6 +339,7 @@ function getRenderSettings() {
     rampWidth: settings.rampWidth,
     stairSteps: settings.stairSteps,
     showMarkers,
+    showCheat,
   };
 }
 
@@ -589,6 +593,10 @@ function bindControls(): void {
   });
   ui.showMarkers.addEventListener('change', () => {
     showMarkers = ui.showMarkers.checked;
+    rebuildMaze();
+  });
+  ui.showCheat.addEventListener('change', () => {
+    showCheat = ui.showCheat.checked;
     rebuildMaze();
   });
   ui.exportScreenshot.addEventListener('click', exportScreenshot);

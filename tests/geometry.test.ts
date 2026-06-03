@@ -22,6 +22,7 @@ const renderSettings = {
   rampWidth: graph.settings.rampWidth,
   stairSteps: graph.settings.stairSteps,
   showMarkers: true,
+  showCheat: false,
 };
 
 function createTransitionGraph(): MazeGraph {
@@ -145,6 +146,16 @@ function hasSlabUndersideTriangle(
   return false;
 }
 
+function hasMeshVertexNearY(mesh: Mesh, y: number): boolean {
+  const positions = mesh.geometry.getAttribute('position');
+  for (let index = 0; index < positions.count; index += 1) {
+    if (Math.abs(positions.getY(index) - y) < 0.025) {
+      return true;
+    }
+  }
+  return false;
+}
+
 describe('maze geometry', () => {
   it('creates finite terrain geometry with positions and normals', () => {
     const geometry = createMazeTerrainGeometry(graph, renderSettings);
@@ -183,6 +194,47 @@ describe('maze geometry', () => {
 
     expect(group.getObjectByName('start-marker')).toBeUndefined();
     expect(group.getObjectByName('end-marker')).toBeUndefined();
+
+    disposeMazeGroup(group);
+  });
+
+  it('draws a red cheat path only when cheat mode is enabled', () => {
+    const hiddenGroup = createMazeGroup(graph, renderSettings);
+    const visibleGroup = createMazeGroup(graph, { ...renderSettings, showCheat: true });
+    const cheatPath = visibleGroup.getObjectByName('cheat-path');
+
+    expect(hiddenGroup.getObjectByName('cheat-path')).toBeUndefined();
+    expect(cheatPath).toBeInstanceOf(Mesh);
+    if (cheatPath instanceof Mesh) {
+      expect(cheatPath.geometry.getAttribute('position').count).toBeGreaterThan(0);
+    }
+
+    disposeMazeGroup(hiddenGroup);
+    disposeMazeGroup(visibleGroup);
+  });
+
+  it('routes the cheat path over stair transition heights', () => {
+    const transitionGraph = createTransitionGraph();
+    const group = createMazeGroup(transitionGraph, {
+      ...renderSettings,
+      heightScale: 0.5,
+      rampRatio: 0,
+      stairSteps: 5,
+      showMarkers: false,
+      showCheat: true,
+    });
+    const cheatPath = group.getObjectByName('cheat-path');
+    const lowTop = 0.28;
+    const highTop = 0.28 + 2 * 0.5;
+    const cheatLift = 0.13;
+
+    expect(cheatPath).toBeInstanceOf(Mesh);
+    if (cheatPath instanceof Mesh) {
+      for (let index = 0; index < 5; index += 1) {
+        const heightRatio = index / 4;
+        expect(hasMeshVertexNearY(cheatPath, lowTop + (highTop - lowTop) * heightRatio + cheatLift)).toBe(true);
+      }
+    }
 
     disposeMazeGroup(group);
   });

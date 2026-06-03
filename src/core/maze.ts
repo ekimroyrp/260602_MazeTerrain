@@ -553,6 +553,51 @@ export function hasPathBetween(graph: MazeGraph, start: GridPoint, end: GridPoin
   return getReachableCellKeys(graph, start).has(`${end.x},${end.y}`);
 }
 
+export function findSolutionPath(graph: MazeGraph, start: GridPoint = graph.start, end: GridPoint = graph.end): GridPoint[] {
+  const startKey = `${start.x},${start.y}`;
+  const endKey = `${end.x},${end.y}`;
+  const queue: GridPoint[] = [start];
+  const visited = new Set([startKey]);
+  const previous = new Map<string, GridPoint | null>([[startKey, null]]);
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const point = queue[cursor];
+    const key = `${point.x},${point.y}`;
+    if (key === endKey) {
+      break;
+    }
+
+    const cell = getCell(graph, point.x, point.y);
+    if (!cell) {
+      continue;
+    }
+
+    for (const direction of cell.links) {
+      const delta = getDirectionDelta(direction);
+      const next = { x: cell.x + delta.x, y: cell.y + delta.y };
+      const nextKey = `${next.x},${next.y}`;
+      if (visited.has(nextKey)) {
+        continue;
+      }
+      visited.add(nextKey);
+      previous.set(nextKey, point);
+      queue.push(next);
+    }
+  }
+
+  if (!previous.has(endKey)) {
+    return [];
+  }
+
+  const path: GridPoint[] = [];
+  let current: GridPoint | null = end;
+  while (current) {
+    path.push(current);
+    current = previous.get(`${current.x},${current.y}`) ?? null;
+  }
+  return path.reverse();
+}
+
 export function getLinkedElevationViolations(graph: MazeGraph): Array<{ from: GridPoint; to: GridPoint; delta: number }> {
   const violations: Array<{ from: GridPoint; to: GridPoint; delta: number }> = [];
   for (const cell of graph.cells) {
