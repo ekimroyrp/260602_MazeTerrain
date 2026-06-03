@@ -380,13 +380,13 @@ function frameCamera(): void {
   const height = Math.max(1, graph.metadata.maxElevation * settings.heightScale + settings.wallHeight);
   camera.position.set(footprint * 0.68, footprint * 0.82 + height, footprint * 0.78);
   camera.near = 0.01;
-  camera.far = Math.max(2000, footprint * 50);
+  camera.far = Math.max(5000, footprint * 100);
   camera.updateProjectionMatrix();
   controls.target.set(0, height * 0.32, 0);
   controls.update();
 }
 
-function rebuildMaze(shouldFrame = false): void {
+function rebuildMaze(): void {
   graph = generateMaze(settings);
   if (mazeGroup) {
     scene.remove(mazeGroup);
@@ -396,9 +396,6 @@ function rebuildMaze(shouldFrame = false): void {
   scene.add(mazeGroup);
   updateStats();
   syncStudioLighting();
-  if (shouldFrame) {
-    frameCamera();
-  }
 }
 
 function nextScreenshotName(): string {
@@ -503,14 +500,13 @@ function bindSectionCollapseToggles(): void {
 }
 
 function bindControls(): void {
-  const rebuildAndFrame = (): void => rebuildMaze(true);
   bindRange(ui.width, ui.widthValue, formatInteger, (value) => {
     settings = normalizeSettings({ ...settings, width: Math.round(value) });
-    rebuildAndFrame();
+    rebuildMaze();
   });
   bindRange(ui.length, ui.lengthValue, formatInteger, (value) => {
     settings = normalizeSettings({ ...settings, length: Math.round(value) });
-    rebuildAndFrame();
+    rebuildMaze();
   });
   bindRange(ui.seed, ui.seedValue, formatInteger, (value) => {
     settings = normalizeSettings({ ...settings, seed: Math.round(value) });
@@ -542,11 +538,11 @@ function bindControls(): void {
   });
   bindRange(ui.levelCount, ui.levelCountValue, formatInteger, (value) => {
     settings = normalizeSettings({ ...settings, levelCount: Math.round(value) });
-    rebuildAndFrame();
+    rebuildMaze();
   });
   bindRange(ui.heightScale, ui.heightScaleValue, formatFixed(2), (value) => {
     settings = normalizeSettings({ ...settings, heightScale: value });
-    rebuildAndFrame();
+    rebuildMaze();
   });
   bindRange(ui.elevationRoughness, ui.elevationRoughnessValue, formatFixed(2), (value) => {
     settings = normalizeSettings({ ...settings, elevationRoughness: value });
@@ -570,7 +566,7 @@ function bindControls(): void {
   });
   bindRange(ui.wallHeight, ui.wallHeightValue, formatFixed(2), (value) => {
     settings = normalizeSettings({ ...settings, wallHeight: value });
-    rebuildAndFrame();
+    rebuildMaze();
   });
   bindRange(ui.wallThickness, ui.wallThicknessValue, formatFixed(2), (value) => {
     settings = normalizeSettings({ ...settings, wallThickness: value });
@@ -583,7 +579,7 @@ function bindControls(): void {
     rebuildMaze();
   });
   ui.generateMaze.addEventListener('click', () => {
-    rebuildMaze(true);
+    rebuildMaze();
   });
   ui.randomizeSeed.addEventListener('click', () => {
     const nextSeed = 1 + Math.floor(Math.random() * 999999);
@@ -652,10 +648,10 @@ function initApp(): void {
   controls.enableDamping = true;
   controls.enablePan = true;
   controls.enableZoom = true;
-  controls.maxDistance = 300;
+  controls.maxDistance = 1600;
   controls.minDistance = 2;
-  controls.minPolarAngle = 0.04;
-  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minPolarAngle = 0.02;
+  controls.maxPolarAngle = Math.PI - 0.02;
   controls.mouseButtons = {
     LEFT: -1 as unknown as MOUSE,
     MIDDLE: MOUSE.PAN,
